@@ -35,7 +35,7 @@ class VideoGeneratorApp:
         self.individual_type = tk.StringVar(value="crossfade")
         self.individual_duration = tk.DoubleVar(value=1.0)
         
-        self.image_durations: Dict[str, float] = {}
+        self.image_durations: Dict[int, float] = {}
         self.default_image_duration = tk.DoubleVar(value=3.0)
         self._selected_image_index: Optional[int] = None
         
@@ -260,72 +260,29 @@ class VideoGeneratorApp:
         self.end_seconds_spin.bind("<<Increment>>", lambda e: self._update_duration_display())
         self.end_seconds_spin.bind("<<Decrement>>", lambda e: self._update_duration_display())
         
-        loop_frame = ttk.LabelFrame(parent, text="🔄 Loop / Repetição", padding="10")
-        loop_frame.pack(fill=tk.X, pady=(0, 10))
+        actions_frame = ttk.LabelFrame(parent, text="Ações", padding="10")
+        actions_frame.pack(fill=tk.X, pady=(0, 10))
         
-        loop_row1 = ttk.Frame(loop_frame)
-        loop_row1.pack(fill=tk.X, pady=(0, 5))
-        
-        ttk.Label(loop_row1, text="Imagens para loop:").pack(side=tk.LEFT, padx=(0, 10))
-        
-        ttk.Label(loop_row1, text="De:").pack(side=tk.LEFT, padx=(0, 5))
-        self.loop_start_var = tk.IntVar(value=1)
-        self.loop_start_spin = ttk.Spinbox(
-            loop_row1, from_=1, to=100, increment=1,
-            textvariable=self.loop_start_var, width=4
-        )
-        self.loop_start_spin.pack(side=tk.LEFT, padx=(0, 10))
-        
-        ttk.Label(loop_row1, text="Até:").pack(side=tk.LEFT, padx=(0, 5))
-        self.loop_end_var = tk.IntVar(value=1)
-        self.loop_end_spin = ttk.Spinbox(
-            loop_row1, from_=1, to=100, increment=1,
-            textvariable=self.loop_end_var, width=4
-        )
-        self.loop_end_spin.pack(side=tk.LEFT, padx=(0, 15))
+        actions_row = ttk.Frame(actions_frame)
+        actions_row.pack(fill=tk.X)
         
         ttk.Button(
-            loop_row1,
-            text="Selecionar Todas",
-            command=self._select_all_for_loop
-        ).pack(side=tk.LEFT)
-        
-        loop_row2 = ttk.Frame(loop_frame)
-        loop_row2.pack(fill=tk.X)
-        
-        ttk.Label(loop_row2, text="Repetir:").pack(side=tk.LEFT, padx=(0, 5))
-        
-        self.loop_count_var = tk.IntVar(value=2)
-        self.loop_count_spin = ttk.Spinbox(
-            loop_row2, from_=2, to=20, increment=1,
-            textvariable=self.loop_count_var, width=4
-        )
-        self.loop_count_spin.pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Label(loop_row2, text="vez(es)").pack(side=tk.LEFT, padx=(0, 20))
-        
-        ttk.Button(
-            loop_row2,
-            text="Aplicar Loop",
-            command=self._apply_loop
+            actions_row,
+            text="⧉ Duplicar Imagem",
+            command=self._duplicate_selected
         ).pack(side=tk.LEFT, padx=(0, 10))
         
-        ttk.Button(
-            loop_row2,
-            text="Preencher até Áudio",
-            command=self._fill_to_audio
-        ).pack(side=tk.LEFT, padx=(0, 20))
-        
-        ttk.Separator(loop_row2, orient="vertical").pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
+        ttk.Separator(actions_row, orient="vertical").pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
         
         self.undo_btn = ttk.Button(
-            loop_row2,
+            actions_row,
             text="↩ Desfazer",
             command=self._undo_timeline
         )
         self.undo_btn.pack(side=tk.LEFT)
         
-        self.loop_info_label = ttk.Label(loop_frame, text="Selecione o intervalo de imagens (ex: 2 a 4 = imagens 2, 3 e 4)")
-        self.loop_info_label.pack(pady=(5, 0))
+        self.loop_info_label = ttk.Label(actions_frame, text="Selecione uma imagem na timeline para duplicá-la")
+        self.loop_info_label.pack(pady=(5, 0), anchor="w")
         
         timeline_frame = ttk.LabelFrame(parent, text="Linha do Tempo (arraste para reordenar)", padding="10")
         timeline_frame.pack(fill=tk.BOTH, expand=True)
@@ -363,9 +320,9 @@ class VideoGeneratorApp:
     def _apply_default_duration(self) -> None:
         """Apply default duration to all images."""
         default = self.default_image_duration.get()
-        for path in self.media_paths:
+        for i, path in enumerate(self.media_paths):
             if self._is_image(path):
-                self.image_durations[path] = default
+                self.image_durations[i] = default
         self._update_timeline()
     
     def _distribute_by_audio(self) -> None:
@@ -401,8 +358,9 @@ class VideoGeneratorApp:
         
         duration_per_image = total_duration / len(image_paths)
         
-        for path in image_paths:
-            self.image_durations[path] = duration_per_image
+        for i, path in enumerate(self.media_paths):
+            if self._is_image(path):
+                self.image_durations[i] = duration_per_image
         
         self.default_image_duration.set(round(duration_per_image, 1))
         self._update_timeline()
@@ -508,113 +466,54 @@ class VideoGeneratorApp:
         self.ai_trans_status.config(text=f"✓ {count} transições sugeridas!")
         self._update_timeline()
     
-    def _select_all_for_loop(self) -> None:
-        """Select all images for loop."""
-        if not self.media_paths:
-            return
-        self.loop_start_var.set(1)
-        self.loop_end_var.set(len(self.media_paths))
-        self.loop_info_label.config(text=f"✓ Selecionadas todas: 1 a {len(self.media_paths)}")
-    
-    def _apply_loop(self) -> None:
-        """Apply loop/repeat to selected image range."""
-        if not self.media_paths:
-            self.loop_info_label.config(text="⚠️ Adicione imagens primeiro")
-            return
+    def _duplicate_selected(self) -> None:
+        """Duplicate the currently selected image and insert it right after."""
+        index = self._selected_image_index
+        if index is None:
+            selection = self.media_listbox.curselection()
+            if selection:
+                index = selection[0]
+            else:
+                self.loop_info_label.config(text="⚠️ Selecione uma imagem na timeline primeiro")
+                return
         
-        loop_count = self.loop_count_var.get()
-        if loop_count < 2:
-            self.loop_info_label.config(text="⚠️ Mínimo 2 repetições")
+        if index >= len(self.media_paths):
             return
         
-        start_idx = self.loop_start_var.get() - 1
-        end_idx = self.loop_end_var.get()
-        
-        if start_idx < 0:
-            start_idx = 0
-        if end_idx > len(self.media_paths):
-            end_idx = len(self.media_paths)
-        if start_idx >= end_idx:
-            self.loop_info_label.config(text="⚠️ Intervalo inválido")
+        path = self.media_paths[index]
+        if not self._is_image(path):
+            self.loop_info_label.config(text="⚠️ Só é possível duplicar imagens")
             return
         
         self._save_state()
         
-        loop_paths = self.media_paths[start_idx:end_idx]
-        loop_count_actual = len(loop_paths)
+        # Copy duration of source
+        src_duration = self.image_durations.get(index, self.default_image_duration.get())
         
-        insert_position = end_idx
+        # Shift all indices > insert_pos up by 1
+        insert_pos = index + 1
+        new_durations = {}
+        for old_idx, dur in self.image_durations.items():
+            if old_idx < insert_pos:
+                new_durations[old_idx] = dur
+            else:
+                new_durations[old_idx + 1] = dur
+        new_durations[insert_pos] = src_duration
+        self.image_durations = new_durations
         
-        for _ in range(loop_count - 1):
-            for path in loop_paths:
-                self.media_paths.insert(insert_position, path)
-                self.media_listbox.insert(insert_position, os.path.basename(path))
-                if self._is_image(path):
-                    self.image_durations[path] = self.image_durations.get(path, self.default_image_duration.get())
-                insert_position += 1
+        self.media_paths.insert(insert_pos, path)
+        self.media_listbox.insert(insert_pos, os.path.basename(path))
         
-        total_added = loop_count_actual * (loop_count - 1)
-        self.loop_info_label.config(
-            text=f"✓ Imagens {start_idx+1}-{end_idx} repetidas {loop_count}x (+{total_added} imagens)"
-        )
+        self._selected_image_index = insert_pos
+        self.media_listbox.selection_clear(0, tk.END)
+        self.media_listbox.selection_set(insert_pos)
+        self.media_listbox.see(insert_pos)
         
-        if self.audio_duration > 0:
-            self._distribute_durations_to_audio()
-        else:
-            self._update_timeline()
-    
-    def _fill_to_audio(self) -> None:
-        """Repeat selected images until they fill the audio duration."""
-        if not self.media_paths:
-            self.loop_info_label.config(text="⚠️ Adicione imagens primeiro")
-            return
+        self._update_timeline()
+        self._update_timeline_selection()
         
-        if self.audio_duration <= 0:
-            self.loop_info_label.config(text="⚠️ Selecione um áudio primeiro")
-            return
-        
-        start_idx = self.loop_start_var.get() - 1
-        end_idx = self.loop_end_var.get()
-        
-        if start_idx < 0:
-            start_idx = 0
-        if end_idx > len(self.media_paths):
-            end_idx = len(self.media_paths)
-        
-        loop_paths = [p for p in self.media_paths[start_idx:end_idx] if self._is_image(p)]
-        if not loop_paths:
-            self.loop_info_label.config(text="⚠️ Nenhuma imagem no intervalo")
-            return
-        
-        loop_duration = sum(self.image_durations.get(p, self.default_image_duration.get()) for p in loop_paths)
-        current_total = sum(self.image_durations.get(p, self.default_image_duration.get()) for p in self.media_paths if self._is_image(p))
-        
-        if current_total >= self.audio_duration:
-            self.loop_info_label.config(text="✓ Imagens já preenchem o áudio")
-            self._save_state()
-            self._distribute_durations_to_audio(force=True)
-            return
-        
-        self._save_state()
-        
-        remaining_time = self.audio_duration - current_total
-        loops_needed = int(remaining_time / loop_duration) + 1
-        
-        insert_position = end_idx
-        added_count = 0
-        
-        for _ in range(loops_needed):
-            for path in loop_paths:
-                self.media_paths.insert(insert_position, path)
-                self.media_listbox.insert(insert_position, os.path.basename(path))
-                insert_position += 1
-                added_count += 1
-        
-        self._distribute_durations_to_audio(force=True)
-        
-        self.loop_info_label.config(
-            text=f"✓ Imagens {start_idx+1}-{end_idx} repetidas até preencher áudio (+{added_count})"
-        )
+        name = os.path.basename(path)
+        self.loop_info_label.config(text=f"✓ '{name}' duplicada na posição {insert_pos + 1}")
     
     def _distribute_durations_to_audio(self, force: bool = False) -> None:
         """Distribute image durations equally to match audio duration."""
@@ -631,8 +530,9 @@ class VideoGeneratorApp:
         
         duration_per_image = self.audio_duration / len(image_paths)
         
-        for path in image_paths:
-            self.image_durations[path] = duration_per_image
+        for i, path in enumerate(self.media_paths):
+            if self._is_image(path):
+                self.image_durations[i] = duration_per_image
         
         self.default_image_duration.set(round(duration_per_image, 1))
         
@@ -668,7 +568,7 @@ class VideoGeneratorApp:
                 self.end_minutes_var.set(int(end_time // 60))
                 self.end_seconds_var.set(end_time % 60)
             
-            self.image_durations[path] = new_duration
+            self.image_durations[index] = new_duration
             
             self.duration_source_label.config(text="")
             
@@ -696,7 +596,7 @@ class VideoGeneratorApp:
             if i >= target_index:
                 break
             if self._is_image(path):
-                start_time += self.image_durations.get(path, self.default_image_duration.get())
+                start_time += self.image_durations.get(i, self.default_image_duration.get())
             else:
                 try:
                     from moviepy.editor import VideoFileClip
@@ -728,10 +628,10 @@ class VideoGeneratorApp:
         total_duration = 0
         items = []
         
-        for path in self.media_paths:
+        for i, path in enumerate(self.media_paths):
             name = os.path.basename(path)
             if self._is_image(path):
-                duration = self.image_durations.get(path, self.default_image_duration.get())
+                duration = self.image_durations.get(i, self.default_image_duration.get())
             else:
                 duration = 0
                 try:
@@ -1040,8 +940,25 @@ class VideoGeneratorApp:
         
         self._save_state()
         
+        # Snapshot current durations as ordered list before reorder
+        old_dur_list = [
+            self.image_durations.get(i, self.default_image_duration.get())
+            for i in range(len(self.media_paths))
+        ]
+        
         path = self.media_paths.pop(source_index)
         self.media_paths.insert(target_index, path)
+        
+        # Apply same reorder to durations list
+        dur = old_dur_list.pop(source_index)
+        old_dur_list.insert(target_index, dur)
+        
+        # Rebuild image_durations dict from reordered list
+        self.image_durations = {
+            i: old_dur_list[i]
+            for i in range(len(self.media_paths))
+            if self._is_image(self.media_paths[i])
+        }
         
         self.media_listbox.delete(0, tk.END)
         for p in self.media_paths:
@@ -1075,7 +992,7 @@ class VideoGeneratorApp:
         
         if self._is_image(path):
             start_time = self._get_start_time_for_index(index)
-            duration = self.image_durations.get(path, self.default_image_duration.get())
+            duration = self.image_durations.get(index, self.default_image_duration.get())
             end_time = start_time + duration
             
             self.start_minutes_var.set(int(start_time // 60))
@@ -1246,8 +1163,14 @@ class VideoGeneratorApp:
         )
         self.progress_bar.pack(fill=tk.X)
         
-        self.status_label = ttk.Label(progress_frame, text="")
-        self.status_label.pack(pady=(5, 0))
+        status_row = ttk.Frame(progress_frame)
+        status_row.pack(fill=tk.X, pady=(5, 0))
+        
+        self.status_label = ttk.Label(status_row, text="")
+        self.status_label.pack(side=tk.LEFT)
+        
+        self.timer_label = ttk.Label(status_row, text="", foreground="gray", font=("TkDefaultFont", 9))
+        self.timer_label.pack(side=tk.RIGHT)
         
         self.generate_btn = ttk.Button(
             parent,
@@ -1691,9 +1614,10 @@ class VideoGeneratorApp:
             
             for path in paths:
                 if path not in self.media_paths:
+                    index = len(self.media_paths)
                     self.media_paths.append(path)
                     self.media_listbox.insert(tk.END, os.path.basename(path))
-                    self.image_durations[path] = self.default_image_duration.get()
+                    self.image_durations[index] = self.default_image_duration.get()
             
             self._update_timeline()
             
@@ -1730,11 +1654,17 @@ class VideoGeneratorApp:
         selection = self.media_listbox.curselection()
         if selection:
             index = selection[0]
-            path = self.media_paths[index]
             self.media_listbox.delete(index)
             del self.media_paths[index]
-            if path in self.image_durations:
-                del self.image_durations[path]
+            # Rebuild image_durations shifting all indices above the removed one down by 1
+            new_durations = {}
+            for old_idx, dur in self.image_durations.items():
+                if old_idx < index:
+                    new_durations[old_idx] = dur
+                elif old_idx > index:
+                    new_durations[old_idx - 1] = dur
+                # old_idx == index is dropped
+            self.image_durations = new_durations
             self._clear_preview()
             self._update_timeline()
             
@@ -1883,6 +1813,11 @@ class VideoGeneratorApp:
         self.status_label.config(text="Gerando vídeo...")
         self.progress_var.set(0)
         
+        import time
+        self._generation_start_time = time.time()
+        self._generation_timer_running = True
+        self._tick_timer()
+        
         thread = threading.Thread(target=self._generate_video_thread)
         thread.daemon = True
         thread.start()
@@ -1918,17 +1853,40 @@ class VideoGeneratorApp:
         except Exception as e:
             self.root.after(0, lambda: self._on_generation_error(str(e)))
             
+    def _tick_timer(self) -> None:
+        """Update the elapsed time label every second."""
+        if not self._generation_timer_running:
+            return
+        import time
+        elapsed = int(time.time() - self._generation_start_time)
+        mins, secs = divmod(elapsed, 60)
+        self.timer_label.config(text=f"⏱ {mins:02d}:{secs:02d}")
+        self._timer_after_id = self.root.after(1000, self._tick_timer)
+    
+    def _stop_timer(self) -> None:
+        """Stop the elapsed time ticker."""
+        self._generation_timer_running = False
+        if hasattr(self, '_timer_after_id'):
+            self.root.after_cancel(self._timer_after_id)
+    
     def _on_generation_complete(self) -> None:
         """Handle successful video generation."""
+        self._stop_timer()
+        import time
+        elapsed = int(time.time() - self._generation_start_time)
+        mins, secs = divmod(elapsed, 60)
         self.generate_btn.config(state=tk.NORMAL)
         self.status_label.config(text="Vídeo gerado com sucesso!")
+        self.timer_label.config(text=f"⏱ {mins:02d}:{secs:02d}")
         self.progress_var.set(100)
         messagebox.showinfo("Sucesso", f"Vídeo salvo em:\n{self.output_path}")
         
     def _on_generation_error(self, error: str) -> None:
         """Handle video generation error."""
+        self._stop_timer()
         self.generate_btn.config(state=tk.NORMAL)
         self.status_label.config(text="Erro na geração")
+        self.timer_label.config(text="")
         self.progress_var.set(0)
         messagebox.showerror("Erro", f"Erro ao gerar vídeo:\n{error}")
 

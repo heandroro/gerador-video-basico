@@ -128,7 +128,7 @@ class VideoGenerator:
         global_transition_type: str = "crossfade",
         global_transition_duration: float = 1.0,
         individual_transitions: Optional[Dict[str, Dict[str, Any]]] = None,
-        image_durations: Optional[Dict[str, float]] = None
+        image_durations: Optional[Dict[int, float]] = None
     ) -> None:
         """
         Generate video from multiple images with custom durations.
@@ -140,7 +140,7 @@ class VideoGenerator:
             global_transition_type: Default transition type for all images
             global_transition_duration: Default transition duration in seconds
             individual_transitions: Dict mapping image paths to custom transition settings
-            image_durations: Dict mapping image paths to display duration in seconds
+            image_durations: Dict mapping image indices to display duration in seconds
         """
         self._load_audio()
         
@@ -163,9 +163,9 @@ class VideoGenerator:
                 resized_path = self._resize_image_to_fit(img_path)
                 resized_paths.append(resized_path)
                 
-                if image_durations and img_path in image_durations:
-                    duration = image_durations[img_path]
-                    print(f"[DEBUG] Imagem {i}: usando duração personalizada {duration}s")
+                if image_durations and i in image_durations:
+                    duration = image_durations[i]
+                    print(f"[DEBUG] Imagem {i} ({img_path}): usando duração personalizada {duration}s")
                 else:
                     duration = self.audio_duration / num_images
                     print(f"[DEBUG] Imagem {i}: usando duração calculada {duration}s")
@@ -288,7 +288,7 @@ class VideoGenerator:
         global_transition_type: str = "crossfade",
         global_transition_duration: float = 1.0,
         individual_transitions: Optional[Dict[str, Dict[str, Any]]] = None,
-        image_durations: Optional[Dict[str, float]] = None
+        image_durations: Optional[Dict[int, float]] = None
     ) -> None:
         """
         Generate video based on the type and number of media files.
@@ -300,7 +300,7 @@ class VideoGenerator:
             global_transition_type: Default transition type for all images
             global_transition_duration: Default transition duration in seconds
             individual_transitions: Dict mapping image paths to custom transition settings
-            image_durations: Dict mapping image paths to display duration in seconds
+            image_durations: Dict mapping image indices to display duration in seconds
         """
         if not media_paths:
             raise ValueError("No media files provided")
