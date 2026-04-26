@@ -32,6 +32,12 @@ Transições disponíveis:
 - wipe_left, wipe_right: cortina horizontal (revelação, comparação)
 - wipe_up, wipe_down: cortina vertical (antes/depois)
 - blur: desfoque (sonhador, suave, artístico)
+- fadewhite: escurece para branco (alegre, suave, luminoso)
+- radial: varredura circular (dinâmico, cinematográfico)
+- circleopen: círculo que se abre (revelação dramática)
+- circleclose: círculo que fecha (encerramento, foco)
+- pixelize: pixelização (tecnológico, retro, digital)
+- smoothleft, smoothright: deslize suave (moderno, elegante)
 
 Durações recomendadas:
 - Rápido: 0.5s
@@ -57,11 +63,17 @@ Com base no conteúdo visual, cores, composição e clima, sugira o melhor efeit
 Transições disponíveis:
 - crossfade: dissolve suave, bom para cenas similares ou clima calmo
 - fade: escurece para preto, bom para mudanças de cena ou efeito dramático
+- fadewhite: escurece para branco, bom para cenas alegres ou luminosas
 - slide_left/slide_right: deslize horizontal, bom para conteúdo sequencial
 - slide_up/slide_down: deslize vertical, bom para listas ou hierarquias
 - wipe_left/wipe_right: cortina horizontal, bom para revelações ou comparações
 - wipe_up/wipe_down: cortina vertical, bom para antes/depois ou progresso
 - blur: transição com desfoque, bom para mudanças suaves ou sonhadoras
+- radial: varredura circular, bom para transições dinâmicas ou cinematográficas
+- circleopen: círculo que abre, bom para revelações dramáticas
+- circleclose: círculo que fecha, bom para encerramento ou foco em cena
+- pixelize: pixelização, bom para conteúdo tecnológico, retro ou digital
+- smoothleft/smoothright: deslize suave moderno, bom para transições elegantes
 - none: corte direto, bom para conteúdo rápido ou ação
 
 Responda no formato JSON:

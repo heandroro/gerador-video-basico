@@ -26,23 +26,68 @@ TRANSITION_TYPES = [
     "wipe_right",
     "wipe_up",
     "wipe_down",
-    "blur"
+    "blur",
+    # xfade-native (requerem FFmpeg xfade)
+    "fadewhite",
+    "radial",
+    "circleopen",
+    "circleclose",
+    "pixelize",
+    "smoothleft",
+    "smoothright",
 ]
 
 TRANSITION_LABELS = {
-    "none": "Nenhum (Corte)",
-    "fade": "Fade (Escurecer)",
-    "crossfade": "Crossfade (Dissolve)",
-    "slide_left": "Slide Esquerda",
+    "none":        "Nenhum (Corte)",
+    "fade":        "Fade (Escurecer)",
+    "crossfade":   "Crossfade (Dissolve)",
+    "slide_left":  "Slide Esquerda",
     "slide_right": "Slide Direita",
-    "slide_up": "Slide Cima",
-    "slide_down": "Slide Baixo",
-    "wipe_left": "Wipe Esquerda",
-    "wipe_right": "Wipe Direita",
-    "wipe_up": "Wipe Cima",
-    "wipe_down": "Wipe Baixo",
-    "blur": "Blur (Desfoque)"
+    "slide_up":    "Slide Cima",
+    "slide_down":  "Slide Baixo",
+    "wipe_left":   "Wipe Esquerda",
+    "wipe_right":  "Wipe Direita",
+    "wipe_up":     "Wipe Cima",
+    "wipe_down":   "Wipe Baixo",
+    "blur":        "Blur (Desfoque)",
+    "fadewhite":   "Fade Branco",
+    "radial":      "Radial",
+    "circleopen":  "Círculo Abre",
+    "circleclose": "Círculo Fecha",
+    "pixelize":    "Pixelizar",
+    "smoothleft":  "Suave Esquerda",
+    "smoothright": "Suave Direita",
 }
+
+# Mapeamento do nosso nome de transição para o nome do filtro xfade do FFmpeg.
+# None = tratar no Python (blur) ou simular (none).
+XFADE_TYPE_MAP = {
+    "none":        None,
+    "fade":        "fadeblack",
+    "crossfade":   "dissolve",
+    "slide_left":  "slideleft",
+    "slide_right": "slideright",
+    "slide_up":    "slideup",
+    "slide_down":  "slidedown",
+    "wipe_left":   "wipeleft",
+    "wipe_right":  "wiperight",
+    "wipe_up":     "wipeup",
+    "wipe_down":   "wipedown",
+    "blur":        None,
+    "fadewhite":   "fadewhite",
+    "radial":      "radial",
+    "circleopen":  "circleopen",
+    "circleclose": "circleclose",
+    "pixelize":    "pixelize",
+    "smoothleft":  "smoothleft",
+    "smoothright": "smoothright",
+}
+
+# Tipos disponíveis somente via FFmpeg xfade (sem implementação Python)
+XFADE_ONLY_TYPES = frozenset({
+    "fadewhite", "radial", "circleopen", "circleclose",
+    "pixelize", "smoothleft", "smoothright",
+})
 
 
 def create_crossfade_transition(
@@ -286,6 +331,10 @@ def apply_transition(
     
     elif transition_type == "blur":
         return create_blur_transition(clip1, clip2, duration)
-    
+
+    elif transition_type in XFADE_ONLY_TYPES:
+        # Sem implementação Python; usa crossfade como fallback
+        return create_crossfade_transition(clip1, clip2, duration)
+
     else:
         return concatenate_videoclips([clip1, clip2], method="compose")

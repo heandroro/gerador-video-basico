@@ -130,6 +130,14 @@ A timeline visual mostra:
 - **Slide** - Desliza em 4 direções (esquerda, direita, cima, baixo)
 - **Wipe** - Cortina em 4 direções
 - **Blur** - Desfoca e foca
+- **Fade Branco** - Escurece para branco e clareia
+- **Radial** - Varredura circular cinematográfica
+- **Círculo Abre** - Círculo que se expande revelando a próxima imagem
+- **Círculo Fecha** - Círculo que fecha sobre a imagem atual
+- **Pixelizar** - Pixelização digital entre imagens
+- **Suave Esquerda / Suave Direita** - Deslize suave moderno
+
+> Os tipos **Fade Branco**, **Radial**, **Círculo Abre/Fecha**, **Pixelizar** e **Suave Esquerda/Direita** utilizam o pipeline FFmpeg nativo (xfade) e têm desempenho superior aos demais.
 
 #### Configuração Global
 - Marque "Ativar transições" para habilitar
