@@ -5,12 +5,14 @@ Aplicação desktop Python que gera vídeos MP4 combinando imagens ou vídeo com
 ## Funcionalidades
 
 - **Uma única imagem** → exibida durante toda a duração do MP3
-- **Múltiplas imagens** → distribuídas igualmente pela duração do MP3
-- **Arquivo de vídeo** → áudio original removido, MP3 substitui
-- **Transições** → efeitos visuais entre imagens com configuração global e individual
-- **Sugestões IA** → Ollama analisa imagens e sugere transições automaticamente (opcional)
-
-O áudio MP3 **sempre predomina** em todos os casos.
+- **Múltiplas imagens** → distribuídas igualmente ou com durações individuais
+- **Linha do Tempo Visual** → arraste blocos para reordenar, visualize transições
+- **Controle de Duração** → defina início/fim de cada imagem em minutos e segundos
+- **Transições** → efeitos visuais entre imagens (global ou individual)
+- **Sugestões IA** → Ollama analisa imagens e sugere transições automaticamente
+- **Loop/Repetição** → repita intervalos de imagens para preencher o áudio
+- **Desfazer** → até 10 ações podem ser desfeitas (Ctrl+Z)
+- **Validação** → compara duração total com o áudio
 
 ## Requisitos
 
@@ -61,11 +63,42 @@ python main.py
 ### Interface
 
 1. **Adicionar Mídia**: Clique em "Adicionar Imagens" ou "Adicionar Vídeo"
-2. **Reordenar**: Use os botões "↑ Subir" e "↓ Descer" para reordenar imagens
-3. **Configurar Transições**: Ative transições e escolha tipo/duração (veja abaixo)
-4. **Selecionar Áudio**: Clique em "Selecionar MP3" para escolher o áudio
-5. **Escolher Saída**: Clique em "Escolher Local" para definir onde salvar
-6. **Gerar**: Clique em "Gerar Vídeo" e aguarde a conclusão
+2. **Linha do Tempo**: Arraste os blocos para reordenar as imagens
+3. **Configurar Duração**: Use os botões para distribuir pelo áudio ou definir manualmente
+4. **Duração Individual**: Clique em uma imagem na timeline e defina início/fim
+5. **Configurar Transições**: Ative transições e escolha tipo/duração
+6. **Sugestões IA**: Clique em "🤖 Sugerir Transições com IA" para análise automática
+7. **Loop**: Selecione um intervalo de imagens e repita para preencher o áudio
+8. **Selecionar Áudio**: Clique em "Selecionar MP3" para escolher o áudio
+9. **Escolher Saída**: Clique em "Escolher Local" para definir onde salvar
+10. **Gerar**: Clique em "Gerar Vídeo" e aguarde a conclusão
+
+### Linha do Tempo
+
+A timeline visual mostra:
+- **Blocos coloridos** → cada imagem com duração proporcional
+- **Setas de transição** → segunda linha mostra tipo e duração de cada transição
+- **Escala de tempo** → marcações em minutos:segundos
+- **Status de duração** → comparação com o áudio (verde/vermelho/laranja)
+- **Arrastar e soltar** → reordene imagens clicando e arrastando os blocos
+
+### Duração das Imagens
+
+#### Distribuição Rápida
+- **"📊 Distribuir pelo Áudio"** → divide igualmente pela duração do MP3
+- **"Aplicar" (manual)** → divide pelo tempo total que você informar
+
+#### Controle Individual
+1. Clique em uma imagem na timeline ou na lista
+2. Defina o **Tempo de Início** (MM:SS) - calculado automaticamente
+3. Defina o **Tempo de Fim** (MM:SS)
+4. Clique "✓ Aplicar"
+5. A duração é calculada: Fim - Início
+
+#### Validação
+- **⚠️ Vermelho** → duração das imagens é menor que o áudio (falta tempo)
+- **⚠️ Laranja** → duração excede o áudio (sobra tempo)
+- **✓ Verde** → duração igual ao áudio
 
 ### Transições
 
@@ -87,13 +120,31 @@ python main.py
 - Marque "Personalizar" para definir transição específica
 - Imagens com transição personalizada são marcadas com ★
 
-#### Sugestões IA (Ollama)
-- Instale Ollama: `brew install ollama`
-- Baixe um modelo de visão: `ollama pull llava`
-- Inicie o Ollama: `ollama serve`
-- Marque "🤖 Sugestões IA" na interface
-- Ao adicionar imagens, a IA analisa e sugere transições
-- Imagens com sugestão IA são marcadas com 🤖
+#### Sugestões IA na Timeline
+- Clique em "🤖 Sugerir Transições com IA" na aba Timeline
+- A IA analisa cada par de imagens consecutivas
+- Transições sugeridas aparecem na segunda linha da timeline
+- Cores indicam o tipo de transição (rosa=crossfade, roxo=fade, etc.)
+
+### Loop / Repetição
+
+Repete um intervalo de imagens para preencher a duração do áudio:
+
+1. Defina "De imagem:" e "Até imagem:" (ex: 1 a 3)
+2. Escolha quantas vezes repetir
+3. Clique "Selecionar Todas" para usar todas as imagens
+4. Clique "Aplicar Loop" ou "Preencher até Áudio"
+
+- **Aplicar Loop** → repete N vezes o intervalo selecionado
+- **Preencher até Áudio** → repete até completar a duração do MP3
+
+### Desfazer
+
+- **Botão ↩ Desfazer** → reverte a última ação
+- **Ctrl+Z** → atalho de teclado
+- Guarda até **10 ações** na memória
+- Ações desfeitas: distribuição de duração, loop, reordenação
+- Mostra quantas ações restam após desfazer
 
 ## Formatos Suportados
 
@@ -121,8 +172,12 @@ python main.py
 │                      gui/app.py                              │
 │                 (Interface Tkinter)                          │
 │  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐   │
-│  │ Lista Mídia │  │  Transições  │  │  Barra Progresso  │   │
-│  │  + Preview  │  │ Global/Indiv │  │   + Status        │   │
+│  │ Lista Mídia │  │   Timeline   │  │  Config Duração   │   │
+│  │  + Preview  │  │  Drag&Drop   │  │  Início/Fim       │   │
+│  └─────────────┘  └──────────────┘  └───────────────────┘   │
+│  ┌─────────────┐  ┌──────────────┐  ┌───────────────────┐   │
+│  │ Transições  │  │  Loop/Undo   │  │ Sugestões IA      │   │
+│  │ Global/Indiv│  │  ↩ Desfazer  │  │ 🤖 Análise        │   │
 │  └─────────────┘  └──────────────┘  └───────────────────┘   │
 └─────────────────────────┬───────────────────────────────────┘
                           │
@@ -135,8 +190,8 @@ python main.py
 │ - ImageClip     │ │ - crossfade   │ │ - Ollama API    │
 │ - VideoFileClip │ │ - fade        │ │ - Modelo llava  │
 │ - AudioFileClip │ │ - slide       │ │ - Análise visual│
-│ - Concatenação  │ │ - wipe        │ │                 │
-│ - Exportação    │ │ - blur        │ │                 │
+│ - Concatenação  │ │ - wipe        │ │ - Sugestões     │
+│ - Durações      │ │ - blur        │ │   automáticas   │
 └────────┬────────┘ └───────────────┘ └─────────────────┘
          │
          ▼
@@ -150,22 +205,28 @@ python main.py
 
 1. **Carregamento do Áudio**
    - O arquivo MP3 é carregado usando MoviePy
-   - A duração do áudio determina a duração total do vídeo
+   - A duração do áudio é exibida para referência
 
 2. **Processamento de Mídia**
    - **Uma imagem**: Exibida durante toda a duração do áudio
-   - **Múltiplas imagens**: Tempo dividido igualmente (ex: 60s de áudio ÷ 6 imagens = 10s cada)
+   - **Múltiplas imagens**: Usa durações individuais definidas pelo usuário
    - **Vídeo**: Áudio original removido, ajustado para duração do MP3
 
-3. **Redimensionamento**
+3. **Durações Personalizadas**
+   - Cada imagem pode ter duração definida individualmente (início/fim)
+   - Validação compara duração total com o áudio
+   - Distribuição pode ser feita pelo áudio ou manualmente
+
+4. **Redimensionamento**
    - Todas as imagens são redimensionadas para 1920x1080 (Full HD)
    - Proporção original mantida com barras pretas se necessário
 
-4. **Aplicação de Transições** (se ativadas)
+5. **Aplicação de Transições** (se ativadas)
    - Para cada par de imagens consecutivas, aplica o efeito escolhido
    - Transições individuais têm prioridade sobre a global
+   - Sugestões da IA podem ser aplicadas automaticamente
 
-5. **Composição Final**
+6. **Composição Final**
    - Clips são concatenados em sequência
    - Áudio MP3 é adicionado à trilha sonora
    - Vídeo é exportado em MP4 (codec H.264 + AAC)
@@ -206,7 +267,7 @@ gen = VideoGenerator(
     audio_path="musica.mp3"
 )
 
-# Gerar com transições
+# Gerar com durações e transições personalizadas
 gen.generate(
     media_paths=["img1.jpg", "img2.jpg", "img3.jpg"],
     transition_enabled=True,
@@ -214,6 +275,11 @@ gen.generate(
     global_transition_duration=1.0,
     individual_transitions={
         "img1.jpg": {"type": "slide_left", "duration": 0.5}
+    },
+    image_durations={
+        "img1.jpg": 5.0,   # 5 segundos
+        "img2.jpg": 3.0,   # 3 segundos
+        "img3.jpg": 4.0    # 4 segundos
     }
 )
 ```
