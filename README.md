@@ -53,6 +53,27 @@ sudo apt install ffmpeg
 # Baixe de https://ffmpeg.org/download.html
 ```
 
+5. (Opcional) Configure o Ollama para sugestões IA:
+```bash
+# macOS
+brew install ollama
+
+# Linux
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+   Baixe o modelo de visão:
+```bash
+ollama pull llava
+```
+
+   Inicie o servidor antes de abrir a aplicação:
+```bash
+ollama serve
+```
+
+   O servidor ficará disponível em `http://localhost:11434`.
+
 ## Uso
 
 Execute a aplicação:
@@ -297,9 +318,15 @@ gerador-video-basico/
 │   ├── video_generator.py  # Lógica de geração
 │   ├── transitions.py      # Efeitos de transição
 │   └── ai_suggester.py     # Sugestões IA com Ollama
+├── docs/
+│   └── FFMPEG.md        # Recursos FFmpeg a explorar
 ├── requirements.txt     # Dependências
 └── README.md            # Este arquivo
 ```
+
+## Documentação Adicional
+
+- [docs/FFMPEG.md](docs/FFMPEG.md) — Recursos FFmpeg utilizados e funcionalidades a explorar em versões futuras
 
 ## Licença
 

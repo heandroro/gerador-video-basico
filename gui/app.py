@@ -61,15 +61,11 @@ class VideoGeneratorApp:
         self.tab_timeline = ttk.Frame(self.notebook, padding="5")
         self.notebook.add(self.tab_timeline, text="⏱️ Linha do Tempo")
         
-        tab_transitions = ttk.Frame(self.notebook, padding="5")
-        self.notebook.add(tab_transitions, text="✨ Transições")
-        
         self.tab_ai = ttk.Frame(self.notebook, padding="5")
         self.notebook.add(self.tab_ai, text="🤖 Sugestões IA")
         
         self._setup_media_tab(tab_media)
         self._setup_timeline_tab(self.tab_timeline)
-        self._setup_transition_tab(tab_transitions)
         self._setup_ai_tab(self.tab_ai)
         
         self._setup_bottom_controls(main_frame)
@@ -316,6 +312,8 @@ class VideoGeneratorApp:
         
         self.timeline_audio_label = ttk.Label(info_frame, text="")
         self.timeline_audio_label.pack(side=tk.RIGHT)
+        
+        self._setup_transition_ui(parent)
     
     def _apply_default_duration(self) -> None:
         """Apply default duration to all images."""
@@ -1012,10 +1010,6 @@ class VideoGeneratorApp:
             self.end_seconds_spin.config(state="disabled")
             self.apply_individual_btn.config(state="disabled")
     
-    def _setup_transition_tab(self, parent: ttk.Frame) -> None:
-        """Setup the transitions tab."""
-        self._setup_transition_ui(parent)
-    
     def _setup_ai_tab(self, parent: ttk.Frame) -> None:
         """Setup the AI suggestions tab."""
         header_frame = ttk.Frame(parent)
@@ -1354,7 +1348,7 @@ class VideoGeneratorApp:
         
         self._add_ai_detail("─" * 40 + "\n", "")
         self._add_ai_detail(f"✅ Análise concluída! {count} transições sugeridas.\n", "header")
-        self._add_ai_detail("Você pode modificar qualquer sugestão na aba Transições.", "reason")
+        self._add_ai_detail("Você pode modificar qualquer sugestão na aba Linha do Tempo.", "reason")
     
     def _clear_ai_details(self) -> None:
         """Clear the AI details text area."""
@@ -1683,26 +1677,56 @@ class VideoGeneratorApp:
         selection = self.media_listbox.curselection()
         if selection and selection[0] > 0:
             index = selection[0]
+            self._save_state()
             self.media_paths[index], self.media_paths[index-1] = \
                 self.media_paths[index-1], self.media_paths[index]
-            
+
+            dur_a = self.image_durations.get(index-1)
+            dur_b = self.image_durations.get(index)
+            if dur_b is not None:
+                self.image_durations[index-1] = dur_b
+            elif index-1 in self.image_durations:
+                del self.image_durations[index-1]
+            if dur_a is not None:
+                self.image_durations[index] = dur_a
+            elif index in self.image_durations:
+                del self.image_durations[index]
+
             item = self.media_listbox.get(index)
             self.media_listbox.delete(index)
             self.media_listbox.insert(index-1, item)
             self.media_listbox.selection_set(index-1)
+            self._update_timeline()
+            self._update_timeline_selection()
+            self._highlight_selected_block()
             
     def _move_down(self) -> None:
         """Move selected item down in the list."""
         selection = self.media_listbox.curselection()
         if selection and selection[0] < len(self.media_paths) - 1:
             index = selection[0]
+            self._save_state()
             self.media_paths[index], self.media_paths[index+1] = \
                 self.media_paths[index+1], self.media_paths[index]
-            
+
+            dur_a = self.image_durations.get(index)
+            dur_b = self.image_durations.get(index+1)
+            if dur_b is not None:
+                self.image_durations[index] = dur_b
+            elif index in self.image_durations:
+                del self.image_durations[index]
+            if dur_a is not None:
+                self.image_durations[index+1] = dur_a
+            elif index+1 in self.image_durations:
+                del self.image_durations[index+1]
+
             item = self.media_listbox.get(index)
             self.media_listbox.delete(index)
             self.media_listbox.insert(index+1, item)
             self.media_listbox.selection_set(index+1)
+            self._update_timeline()
+            self._update_timeline_selection()
+            self._highlight_selected_block()
             
     def _on_select(self, event) -> None:
         """Handle selection change in the media list."""
