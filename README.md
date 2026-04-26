@@ -327,7 +327,8 @@ gerador-video-basico/
 │   ├── transitions.py      # Efeitos de transição
 │   └── ai_suggester.py     # Sugestões IA com Ollama
 ├── docs/
-│   └── FFMPEG.md        # Recursos FFmpeg a explorar
+│   ├── FFMPEG.md        # Recursos FFmpeg a explorar
+│   └── OLLAMA.md        # Guia de uso do Ollama e integração IA
 ├── requirements.txt     # Dependências
 └── README.md            # Este arquivo
 ```
@@ -335,6 +336,7 @@ gerador-video-basico/
 ## Documentação Adicional
 
 - [docs/FFMPEG.md](docs/FFMPEG.md) — Recursos FFmpeg utilizados e funcionalidades a explorar em versões futuras
+- [docs/OLLAMA.md](docs/OLLAMA.md) — Guia completo de instalação, configuração e uso do Ollama para sugestões IA
 
 ## Licença
 

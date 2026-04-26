@@ -71,83 +71,183 @@ class VideoGeneratorApp:
         self._setup_bottom_controls(main_frame)
     
     def _setup_media_tab(self, parent: ttk.Frame) -> None:
-        """Setup the media tab."""
-        media_btn_frame = ttk.Frame(parent)
+        """Setup the media tab with internal sub-tabs."""
+        media_notebook = ttk.Notebook(parent)
+        media_notebook.pack(fill=tk.BOTH, expand=True)
+
+        tab_visual = ttk.Frame(media_notebook, padding="5")
+        media_notebook.add(tab_visual, text="🖼️ Imagens / Vídeo")
+
+        tab_audio = ttk.Frame(media_notebook, padding="5")
+        media_notebook.add(tab_audio, text="🎵 Áudio")
+
+        # ── Aba: Imagens / Vídeo ──────────────────────────────────────
+        media_btn_frame = ttk.Frame(tab_visual)
         media_btn_frame.pack(fill=tk.X, pady=(0, 5))
-        
+
         ttk.Button(
-            media_btn_frame, 
+            media_btn_frame,
             text="Adicionar Imagens",
             command=self._add_images
         ).pack(side=tk.LEFT, padx=(0, 5))
-        
+
         ttk.Button(
             media_btn_frame,
             text="Adicionar Vídeo",
             command=self._add_video
         ).pack(side=tk.LEFT, padx=(0, 5))
-        
+
         ttk.Button(
             media_btn_frame,
             text="Remover Selecionado",
             command=self._remove_selected
         ).pack(side=tk.LEFT, padx=(0, 5))
-        
+
         ttk.Button(
             media_btn_frame,
             text="Limpar Tudo",
             command=self._clear_media
         ).pack(side=tk.LEFT, padx=(0, 5))
-        
+
         ttk.Button(
             media_btn_frame,
             text="↑ Subir",
             command=self._move_up
         ).pack(side=tk.RIGHT, padx=(5, 0))
-        
+
         ttk.Button(
             media_btn_frame,
             text="↓ Descer",
             command=self._move_down
         ).pack(side=tk.RIGHT)
-        
-        list_frame = ttk.Frame(parent)
+
+        list_frame = ttk.Frame(tab_visual)
         list_frame.pack(fill=tk.BOTH, expand=True)
-        
+
         self.media_listbox = tk.Listbox(list_frame, selectmode=tk.SINGLE, height=10)
         self.media_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.media_listbox.bind('<<ListboxSelect>>', self._on_select)
-        
+
         scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.media_listbox.yview)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         self.media_listbox.config(yscrollcommand=scrollbar.set)
-        
-        preview_frame = ttk.LabelFrame(parent, text="Pré-visualização", padding="5")
+
+        preview_frame = ttk.LabelFrame(tab_visual, text="Pré-visualização", padding="5")
         preview_frame.pack(fill=tk.X, pady=(10, 0))
-        
+
         self.preview_label = ttk.Label(preview_frame, text="Selecione uma mídia para visualizar")
         self.preview_label.pack(pady=10)
+
+        # ── Aba: Áudio ────────────────────────────────────────────────
+        audio_group = ttk.LabelFrame(tab_audio, text="Arquivo de Áudio MP3", padding="10")
+        audio_group.pack(fill=tk.X, pady=(0, 10))
+
+        audio_inner = ttk.Frame(audio_group)
+        audio_inner.pack(fill=tk.X)
+
+        ttk.Button(
+            audio_inner,
+            text="Selecionar MP3",
+            command=self._select_audio
+        ).pack(side=tk.LEFT, padx=(0, 10))
+
+        self.audio_label = ttk.Label(audio_inner, text="Nenhum arquivo selecionado")
+        self.audio_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        output_group = ttk.LabelFrame(tab_audio, text="Local de Salvamento", padding="10")
+        output_group.pack(fill=tk.X, pady=(0, 10))
+
+        output_inner = ttk.Frame(output_group)
+        output_inner.pack(fill=tk.X)
+
+        ttk.Button(
+            output_inner,
+            text="Escolher Local",
+            command=self._select_output
+        ).pack(side=tk.LEFT, padx=(0, 10))
+
+        self.output_label = ttk.Label(output_inner, text="Nenhum local selecionado")
+        self.output_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
     
     def _setup_timeline_tab(self, parent: ttk.Frame) -> None:
         """Setup the timeline tab."""
-        config_frame = ttk.LabelFrame(parent, text="Configuração de Duração", padding="10")
+        # ── Linha do Tempo ────────────────────────────────────────────────
+        timeline_frame = ttk.LabelFrame(parent, text="Linha do Tempo (arraste para reordenar)", padding="10")
+        timeline_frame.pack(fill=tk.BOTH, expand=True, pady=(0, 5))
+
+        self.timeline_canvas = tk.Canvas(timeline_frame, height=160, bg="white")
+        self.timeline_canvas.pack(fill=tk.BOTH, expand=True)
+
+        self._drag_data = {"index": None, "start_x": 0}
+        self.timeline_canvas.bind("<ButtonPress-1>", self._on_drag_start)
+        self.timeline_canvas.bind("<B1-Motion>", self._on_drag_motion)
+        self.timeline_canvas.bind("<ButtonRelease-1>", self._on_drag_end)
+
+        # ── Duração total ─────────────────────────────────────────────────
+        info_frame = ttk.Frame(parent)
+        info_frame.pack(fill=tk.X, pady=(5, 5))
+
+        self.timeline_total_label = ttk.Label(info_frame, text="Duração total: 0:00", font=("TkDefaultFont", 11, "bold"))
+        self.timeline_total_label.pack(side=tk.LEFT)
+
+        self.timeline_audio_label = ttk.Label(info_frame, text="")
+        self.timeline_audio_label.pack(side=tk.RIGHT)
+
+        # ── Botão Gerar Vídeo ─────────────────────────────────────────────
+        self.generate_btn = ttk.Button(
+            parent,
+            text="▶ Gerar Vídeo",
+            command=self._generate_video
+        )
+        self.generate_btn.pack(fill=tk.X, pady=(0, 5))
+
+        # ── Botão Sugerir Transições com IA ───────────────────────────────
+        ai_trans_frame = ttk.Frame(parent)
+        ai_trans_frame.pack(fill=tk.X, pady=(0, 8))
+
+        self.ai_suggest_btn = ttk.Button(
+            ai_trans_frame,
+            text="🤖 Sugerir Transições com IA",
+            command=self._suggest_transitions_with_ai
+        )
+        self.ai_suggest_btn.pack(side=tk.LEFT, padx=(0, 10))
+
+        self.ai_trans_status = ttk.Label(ai_trans_frame, text="")
+        self.ai_trans_status.pack(side=tk.LEFT)
+
+        # ── Sub-abas ──────────────────────────────────────────────────────
+        sub_notebook = ttk.Notebook(parent)
+        sub_notebook.pack(fill=tk.BOTH, expand=False)
+
+        tab_transitions = ttk.Frame(sub_notebook, padding="5")
+        sub_notebook.add(tab_transitions, text="🔀 Transições")
+
+        tab_duration = ttk.Frame(sub_notebook, padding="5")
+        sub_notebook.add(tab_duration, text="⏱️ Duração individual e geral")
+
+        self._setup_transition_ui(tab_transitions)
+        self._setup_duration_ui(tab_duration)
+
+    def _setup_duration_ui(self, parent: ttk.Frame) -> None:
+        """Setup duration controls (general and individual)."""
+        config_frame = ttk.LabelFrame(parent, text="Duração Geral", padding="10")
         config_frame.pack(fill=tk.X, pady=(0, 10))
-        
+
         auto_frame = ttk.Frame(config_frame)
         auto_frame.pack(fill=tk.X, pady=(0, 10))
-        
+
         self.auto_distribute_var = tk.BooleanVar(value=False)
-        
+
         ttk.Button(
             auto_frame,
             text="📊 Distribuir pelo Áudio",
             command=self._distribute_by_audio
         ).pack(side=tk.LEFT, padx=(0, 15))
-        
+
         ttk.Separator(auto_frame, orient="vertical").pack(side=tk.LEFT, fill=tk.Y, padx=(0, 15))
-        
+
         ttk.Label(auto_frame, text="Duração total manual:").pack(side=tk.LEFT, padx=(0, 5))
-        
+
         self.manual_duration_var = tk.DoubleVar(value=60.0)
         self.manual_duration_spin = ttk.Spinbox(
             auto_frame,
@@ -159,21 +259,21 @@ class VideoGeneratorApp:
         )
         self.manual_duration_spin.pack(side=tk.LEFT, padx=(0, 5))
         ttk.Label(auto_frame, text="s").pack(side=tk.LEFT, padx=(0, 10))
-        
+
         ttk.Button(
             auto_frame,
             text="Aplicar",
             command=self._apply_manual_duration
         ).pack(side=tk.LEFT)
-        
+
         self.duration_source_label = ttk.Label(auto_frame, text="", foreground="gray")
         self.duration_source_label.pack(side=tk.LEFT, padx=(10, 0))
-        
+
         default_frame = ttk.Frame(config_frame)
-        default_frame.pack(fill=tk.X, pady=(0, 10))
-        
+        default_frame.pack(fill=tk.X)
+
         ttk.Label(default_frame, text="Duração padrão por imagem:").pack(side=tk.LEFT, padx=(0, 10))
-        
+
         self.default_duration_spin = ttk.Spinbox(
             default_frame,
             from_=1.0,
@@ -184,21 +284,21 @@ class VideoGeneratorApp:
         )
         self.default_duration_spin.pack(side=tk.LEFT, padx=(0, 5))
         ttk.Label(default_frame, text="segundos").pack(side=tk.LEFT, padx=(0, 20))
-        
+
         ttk.Button(
             default_frame,
             text="Aplicar a Todas",
             command=self._apply_default_duration
         ).pack(side=tk.LEFT)
-        
-        individual_frame = ttk.LabelFrame(config_frame, text="Duração Individual", padding="5")
-        individual_frame.pack(fill=tk.X)
-        
+
+        individual_frame = ttk.LabelFrame(parent, text="Duração Individual", padding="5")
+        individual_frame.pack(fill=tk.X, pady=(10, 10))
+
         time_row1 = ttk.Frame(individual_frame)
         time_row1.pack(fill=tk.X, pady=(0, 5))
-        
+
         ttk.Label(time_row1, text="Início:").pack(side=tk.LEFT, padx=(0, 5))
-        
+
         self.start_minutes_var = tk.IntVar(value=0)
         self.start_minutes_spin = ttk.Spinbox(
             time_row1, from_=0, to=60, increment=1,
@@ -206,16 +306,16 @@ class VideoGeneratorApp:
         )
         self.start_minutes_spin.pack(side=tk.LEFT, padx=(0, 2))
         ttk.Label(time_row1, text=":").pack(side=tk.LEFT)
-        
+
         self.start_seconds_var = tk.DoubleVar(value=0.0)
         self.start_seconds_spin = ttk.Spinbox(
             time_row1, from_=0, to=59.9, increment=0.5,
             textvariable=self.start_seconds_var, width=5, state="disabled"
         )
         self.start_seconds_spin.pack(side=tk.LEFT, padx=(0, 15))
-        
+
         ttk.Label(time_row1, text="Fim:").pack(side=tk.LEFT, padx=(0, 5))
-        
+
         self.end_minutes_var = tk.IntVar(value=0)
         self.end_minutes_spin = ttk.Spinbox(
             time_row1, from_=0, to=60, increment=1,
@@ -223,14 +323,14 @@ class VideoGeneratorApp:
         )
         self.end_minutes_spin.pack(side=tk.LEFT, padx=(0, 2))
         ttk.Label(time_row1, text=":").pack(side=tk.LEFT)
-        
+
         self.end_seconds_var = tk.DoubleVar(value=3.0)
         self.end_seconds_spin = ttk.Spinbox(
             time_row1, from_=0, to=59.9, increment=0.5,
             textvariable=self.end_seconds_var, width=5
         )
         self.end_seconds_spin.pack(side=tk.LEFT, padx=(0, 15))
-        
+
         self.apply_individual_btn = ttk.Button(
             time_row1,
             text="✓ Aplicar",
@@ -238,83 +338,48 @@ class VideoGeneratorApp:
             width=10
         )
         self.apply_individual_btn.pack(side=tk.LEFT)
-        
+
         time_row2 = ttk.Frame(individual_frame)
         time_row2.pack(fill=tk.X)
-        
+
         ttk.Label(time_row2, text="Duração:").pack(side=tk.LEFT, padx=(0, 5))
         self.duration_display_label = ttk.Label(time_row2, text="0:00", font=("TkDefaultFont", 10, "bold"))
         self.duration_display_label.pack(side=tk.LEFT, padx=(0, 20))
-        
+
         self.timeline_item_label = ttk.Label(time_row2, text="⬆️ Selecione uma imagem")
         self.timeline_item_label.pack(side=tk.LEFT)
-        
+
         self.end_minutes_spin.bind("<Return>", lambda e: self._on_timeline_duration_change())
         self.end_seconds_spin.bind("<Return>", lambda e: self._on_timeline_duration_change())
         self.end_minutes_spin.bind("<<Increment>>", lambda e: self._update_duration_display())
         self.end_minutes_spin.bind("<<Decrement>>", lambda e: self._update_duration_display())
         self.end_seconds_spin.bind("<<Increment>>", lambda e: self._update_duration_display())
         self.end_seconds_spin.bind("<<Decrement>>", lambda e: self._update_duration_display())
-        
+
         actions_frame = ttk.LabelFrame(parent, text="Ações", padding="10")
-        actions_frame.pack(fill=tk.X, pady=(0, 10))
-        
+        actions_frame.pack(fill=tk.X)
+
         actions_row = ttk.Frame(actions_frame)
         actions_row.pack(fill=tk.X)
-        
+
         ttk.Button(
             actions_row,
             text="⧉ Duplicar Imagem",
             command=self._duplicate_selected
         ).pack(side=tk.LEFT, padx=(0, 10))
-        
+
         ttk.Separator(actions_row, orient="vertical").pack(side=tk.LEFT, fill=tk.Y, padx=(0, 10))
-        
+
         self.undo_btn = ttk.Button(
             actions_row,
             text="↩ Desfazer",
             command=self._undo_timeline
         )
         self.undo_btn.pack(side=tk.LEFT)
-        
+
         self.loop_info_label = ttk.Label(actions_frame, text="Selecione uma imagem na timeline para duplicá-la")
         self.loop_info_label.pack(pady=(5, 0), anchor="w")
-        
-        timeline_frame = ttk.LabelFrame(parent, text="Linha do Tempo (arraste para reordenar)", padding="10")
-        timeline_frame.pack(fill=tk.BOTH, expand=True)
-        
-        ai_trans_frame = ttk.Frame(timeline_frame)
-        ai_trans_frame.pack(fill=tk.X, pady=(0, 5))
-        
-        self.ai_suggest_btn = ttk.Button(
-            ai_trans_frame,
-            text="🤖 Sugerir Transições com IA",
-            command=self._suggest_transitions_with_ai
-        )
-        self.ai_suggest_btn.pack(side=tk.LEFT, padx=(0, 10))
-        
-        self.ai_trans_status = ttk.Label(ai_trans_frame, text="")
-        self.ai_trans_status.pack(side=tk.LEFT)
-        
-        self.timeline_canvas = tk.Canvas(timeline_frame, height=160, bg="white")
-        self.timeline_canvas.pack(fill=tk.BOTH, expand=True)
-        
-        self._drag_data = {"index": None, "start_x": 0}
-        self.timeline_canvas.bind("<ButtonPress-1>", self._on_drag_start)
-        self.timeline_canvas.bind("<B1-Motion>", self._on_drag_motion)
-        self.timeline_canvas.bind("<ButtonRelease-1>", self._on_drag_end)
-        
-        info_frame = ttk.Frame(parent)
-        info_frame.pack(fill=tk.X, pady=(10, 0))
-        
-        self.timeline_total_label = ttk.Label(info_frame, text="Duração total: 0:00", font=("TkDefaultFont", 11, "bold"))
-        self.timeline_total_label.pack(side=tk.LEFT)
-        
-        self.timeline_audio_label = ttk.Label(info_frame, text="")
-        self.timeline_audio_label.pack(side=tk.RIGHT)
-        
-        self._setup_transition_ui(parent)
-    
+
     def _apply_default_duration(self) -> None:
         """Apply default duration to all images."""
         default = self.default_image_duration.get()
@@ -1114,40 +1179,10 @@ class VideoGeneratorApp:
         self.ai_details_text.tag_configure("reason", foreground="#666666")
     
     def _setup_bottom_controls(self, parent: ttk.Frame) -> None:
-        """Setup bottom controls (audio, output, progress, generate button)."""
-        audio_frame = ttk.LabelFrame(parent, text="Áudio MP3", padding="5")
-        audio_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        audio_inner = ttk.Frame(audio_frame)
-        audio_inner.pack(fill=tk.X)
-        
-        ttk.Button(
-            audio_inner,
-            text="Selecionar MP3",
-            command=self._select_audio
-        ).pack(side=tk.LEFT, padx=(0, 10))
-        
-        self.audio_label = ttk.Label(audio_inner, text="Nenhum arquivo selecionado")
-        self.audio_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        
-        output_frame = ttk.LabelFrame(parent, text="Arquivo de Saída", padding="5")
-        output_frame.pack(fill=tk.X, pady=(0, 10))
-        
-        output_inner = ttk.Frame(output_frame)
-        output_inner.pack(fill=tk.X)
-        
-        ttk.Button(
-            output_inner,
-            text="Escolher Local",
-            command=self._select_output
-        ).pack(side=tk.LEFT, padx=(0, 10))
-        
-        self.output_label = ttk.Label(output_inner, text="Nenhum local selecionado")
-        self.output_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        
+        """Setup bottom controls (progress bar)."""
         progress_frame = ttk.Frame(parent)
         progress_frame.pack(fill=tk.X, pady=(0, 10))
-        
+
         self.progress_var = tk.DoubleVar(value=0)
         self.progress_bar = ttk.Progressbar(
             progress_frame,
@@ -1156,22 +1191,15 @@ class VideoGeneratorApp:
             mode='determinate'
         )
         self.progress_bar.pack(fill=tk.X)
-        
+
         status_row = ttk.Frame(progress_frame)
         status_row.pack(fill=tk.X, pady=(5, 0))
-        
+
         self.status_label = ttk.Label(status_row, text="")
         self.status_label.pack(side=tk.LEFT)
-        
+
         self.timer_label = ttk.Label(status_row, text="", foreground="gray", font=("TkDefaultFont", 9))
         self.timer_label.pack(side=tk.RIGHT)
-        
-        self.generate_btn = ttk.Button(
-            parent,
-            text="Gerar Vídeo",
-            command=self._generate_video
-        )
-        self.generate_btn.pack(pady=10)
     
     def _setup_transition_ui(self, parent: ttk.Frame) -> None:
         """Setup the transition configuration UI."""
