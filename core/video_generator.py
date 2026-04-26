@@ -1,5 +1,5 @@
 import os
-from typing import List, Optional, Callable
+from typing import List, Optional, Callable, Dict, Any
 from moviepy.editor import (
     ImageClip,
     VideoFileClip,
@@ -8,6 +8,7 @@ from moviepy.editor import (
     CompositeVideoClip
 )
 from PIL import Image
+from core.transitions import apply_transition, TRANSITION_TYPES
 
 
 class VideoGenerator:
@@ -122,14 +123,24 @@ class VideoGenerator:
     def generate_from_multiple_images(
         self,
         image_paths: List[str],
-        progress_callback: Optional[Callable[[float], None]] = None
+        progress_callback: Optional[Callable[[float], None]] = None,
+        transition_enabled: bool = False,
+        global_transition_type: str = "crossfade",
+        global_transition_duration: float = 1.0,
+        individual_transitions: Optional[Dict[str, Dict[str, Any]]] = None,
+        image_durations: Optional[Dict[str, float]] = None
     ) -> None:
         """
-        Generate video from multiple images distributed equally over audio duration.
+        Generate video from multiple images with custom durations.
         
         Args:
             image_paths: List of paths to image files
             progress_callback: Optional callback for progress updates (0.0 to 1.0)
+            transition_enabled: Whether to apply transitions between images
+            global_transition_type: Default transition type for all images
+            global_transition_duration: Default transition duration in seconds
+            individual_transitions: Dict mapping image paths to custom transition settings
+            image_durations: Dict mapping image paths to display duration in seconds
         """
         self._load_audio()
         
@@ -137,7 +148,12 @@ class VideoGenerator:
             progress_callback(0.1)
         
         num_images = len(image_paths)
-        duration_per_image = self.audio_duration / num_images
+        individual_transitions = individual_transitions or {}
+        image_durations = image_durations or {}
+        
+        print(f"[DEBUG] image_durations recebido: {image_durations}")
+        print(f"[DEBUG] individual_transitions recebido: {individual_transitions}")
+        print(f"[DEBUG] audio_duration: {self.audio_duration}")
         
         clips = []
         resized_paths = []
@@ -147,17 +163,56 @@ class VideoGenerator:
                 resized_path = self._resize_image_to_fit(img_path)
                 resized_paths.append(resized_path)
                 
-                clip = ImageClip(resized_path).set_duration(duration_per_image)
+                if image_durations and img_path in image_durations:
+                    duration = image_durations[img_path]
+                    print(f"[DEBUG] Imagem {i}: usando duração personalizada {duration}s")
+                else:
+                    duration = self.audio_duration / num_images
+                    print(f"[DEBUG] Imagem {i}: usando duração calculada {duration}s")
+                
+                clip = ImageClip(resized_path).set_duration(duration)
                 clips.append(clip)
                 
                 if progress_callback:
                     progress_callback(0.1 + (0.3 * (i + 1) / num_images))
             
-            final_clip = concatenate_videoclips(clips, method="compose")
+            if transition_enabled and len(clips) > 1:
+                print(f"[DEBUG] Transições ativadas: tipo={global_transition_type}, duração={global_transition_duration}")
+                final_clip = clips[0]
+                for i in range(1, len(clips)):
+                    prev_path = image_paths[i - 1]
+                    
+                    if prev_path in individual_transitions:
+                        trans_type = individual_transitions[prev_path].get("type", global_transition_type)
+                        trans_duration = individual_transitions[prev_path].get("duration", global_transition_duration)
+                    else:
+                        trans_type = global_transition_type
+                        trans_duration = global_transition_duration
+                    
+                    print(f"[DEBUG] Aplicando transição {i}: {trans_type} ({trans_duration}s)")
+                    final_clip = apply_transition(
+                        final_clip,
+                        clips[i],
+                        trans_type,
+                        trans_duration
+                    )
+                    
+                    if progress_callback:
+                        progress_callback(0.4 + (0.2 * i / (len(clips) - 1)))
+            else:
+                final_clip = concatenate_videoclips(clips, method="compose")
+            
+            if final_clip.duration != self.audio_duration:
+                if final_clip.duration > self.audio_duration:
+                    final_clip = final_clip.subclip(0, self.audio_duration)
+                else:
+                    speed_factor = final_clip.duration / self.audio_duration
+                    final_clip = final_clip.fx(lambda c: c.set_duration(self.audio_duration))
+            
             final_clip = final_clip.set_audio(self.audio_clip)
             
             if progress_callback:
-                progress_callback(0.5)
+                progress_callback(0.6)
             
             final_clip.write_videofile(
                 self.output_path,
@@ -228,7 +283,12 @@ class VideoGenerator:
     def generate(
         self,
         media_paths: List[str],
-        progress_callback: Optional[Callable[[float], None]] = None
+        progress_callback: Optional[Callable[[float], None]] = None,
+        transition_enabled: bool = False,
+        global_transition_type: str = "crossfade",
+        global_transition_duration: float = 1.0,
+        individual_transitions: Optional[Dict[str, Dict[str, Any]]] = None,
+        image_durations: Optional[Dict[str, float]] = None
     ) -> None:
         """
         Generate video based on the type and number of media files.
@@ -236,6 +296,11 @@ class VideoGenerator:
         Args:
             media_paths: List of paths to media files (images or video)
             progress_callback: Optional callback for progress updates (0.0 to 1.0)
+            transition_enabled: Whether to apply transitions between images
+            global_transition_type: Default transition type for all images
+            global_transition_duration: Default transition duration in seconds
+            individual_transitions: Dict mapping image paths to custom transition settings
+            image_durations: Dict mapping image paths to display duration in seconds
         """
         if not media_paths:
             raise ValueError("No media files provided")
@@ -252,4 +317,12 @@ class VideoGenerator:
             for path in media_paths:
                 if not self._is_image(path):
                     raise ValueError(f"Multiple files mode only supports images: {path}")
-            self.generate_from_multiple_images(media_paths, progress_callback)
+            self.generate_from_multiple_images(
+                media_paths,
+                progress_callback,
+                transition_enabled,
+                global_transition_type,
+                global_transition_duration,
+                individual_transitions,
+                image_durations
+            )
