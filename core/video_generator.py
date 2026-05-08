@@ -31,6 +31,14 @@ class VideoGenerator:
         self.audio_clip: Optional[AudioFileClip] = None
         self.audio_duration: float = 0
         
+        # Target resolution for output
+        self.target_width = 1920
+        self.target_height = 1080
+        
+        # Temp directory for intermediate files
+        import tempfile
+        self.temp_dir = tempfile.gettempdir()
+        
     def _load_audio(self) -> None:
         """Load the audio file and get its duration."""
         self.audio_clip = AudioFileClip(self.audio_path)
@@ -352,6 +360,214 @@ class VideoGenerator:
             if self.audio_clip:
                 self.audio_clip.close()
     
+    def generate_from_multiple_media(
+        self,
+        media_paths: List[str],
+        progress_callback: Optional[Callable[[float], None]] = None,
+        transition_enabled: bool = False,
+        global_transition_type: str = "crossfade",
+        global_transition_duration: float = 1.0,
+        individual_transitions: Optional[Dict[str, Dict[str, Any]]] = None,
+        image_durations: Optional[Dict[int, float]] = None
+    ) -> None:
+        """
+        Generate video from multiple media files (images and/or videos).
+        
+        Args:
+            media_paths: List of paths to media files (images or videos)
+            progress_callback: Optional callback for progress updates (0.0 to 1.0)
+            transition_enabled: Whether to apply transitions between clips
+            global_transition_type: Default transition type
+            global_transition_duration: Default transition duration in seconds
+            individual_transitions: Dict mapping image paths to custom transition settings
+            image_durations: Dict mapping image indices to display duration in seconds
+        """
+        self._load_audio()
+        
+        if progress_callback:
+            progress_callback(0.1)
+        
+        num_media = len(media_paths)
+        individual_transitions = individual_transitions or {}
+        image_durations = image_durations or {}
+        
+        print(f"[DEBUG] generate_from_multiple_media: {num_media} items")
+        print(f"[DEBUG] image_durations: {image_durations}")
+        
+        clips = []
+        resized_paths = []
+        durations = []
+        
+        try:
+            for i, path in enumerate(media_paths):
+                if self._is_image(path):
+                    # Handle image: resize and create ImageClip
+                    resized_path = self._resize_image_to_fit(path)
+                    resized_paths.append(resized_path)
+                    
+                    if image_durations and i in image_durations:
+                        duration = image_durations[i]
+                        print(f"[DEBUG] Imagem {i}: duração personalizada {duration}s")
+                    else:
+                        duration = self.audio_duration / num_media
+                        print(f"[DEBUG] Imagem {i}: duração calculada {duration}s")
+                    
+                    durations.append(duration)
+                    clip = ImageClip(resized_path).set_duration(duration)
+                    clips.append(clip)
+                    
+                elif self._is_video(path):
+                    # Handle video: extract clip and resize if needed
+                    print(f"[DEBUG] Vídeo {i}: processando {path}")
+                    
+                    # Get video duration
+                    try:
+                        with VideoFileClip(path) as video:
+                            video_duration = video.duration
+                            if image_durations and i in image_durations:
+                                target_duration = image_durations[i]
+                            else:
+                                target_duration = video_duration
+                    except Exception as e:
+                        print(f"[WARN] Não foi possível obter duração do vídeo: {e}")
+                        target_duration = self.audio_duration / num_media
+                    
+                    # Load video and resize to target resolution
+                    video_clip = VideoFileClip(path)
+                    # Use manual resize approach to avoid PIL ANTIALIAS issue
+                    from moviepy.video.fx.resize import resize
+                    try:
+                        video_clip = resize(video_clip, newsize=(self.target_width, self.target_height))
+                    except AttributeError:
+                        # Fallback: resize using alternative method
+                        from PIL import Image
+                        import numpy as np
+                        
+                        def resize_frame(frame):
+                            img = Image.fromarray(frame)
+                            # Use Resampling.LANCZOS for newer Pillow, fallback to BILINEAR
+                            try:
+                                resample = Image.Resampling.LANCZOS
+                            except AttributeError:
+                                resample = Image.LANCZOS if hasattr(Image, 'LANCZOS') else Image.BILINEAR
+                            img_resized = img.resize((self.target_width, self.target_height), resample)
+                            return np.array(img_resized)
+                        
+                        video_clip = video_clip.fl_image(resize_frame)
+                    
+                    if target_duration < video_clip.duration:
+                        video_clip = video_clip.subclip(0, target_duration)
+                    else:
+                        video_clip = video_clip.set_duration(target_duration)
+                    
+                    # Don't add to resized_paths (video clip object handles its own file)
+                    durations.append(target_duration)
+                    clips.append(video_clip)
+                    
+                else:
+                    raise ValueError(f"Unsupported file format: {path}")
+                
+                if progress_callback:
+                    progress_callback(0.1 + (0.2 * (i + 1) / num_media))
+            
+            if progress_callback:
+                progress_callback(0.3)
+            
+            # Build transitions list
+            transitions_list = []
+            for i in range(len(clips) - 1):
+                path = media_paths[i]
+                trans = individual_transitions.get(path, {})
+                trans_type = trans.get("type", global_transition_type)
+                trans_dur = trans.get("duration", global_transition_duration)
+                transitions_list.append((trans_type, trans_dur))
+            
+            print(f"[DEBUG] Transições: {transitions_list}")
+            
+            # Use MoviePy for all cases (including videos)
+            self._generate_with_moviepy_clips(
+                clips, durations, transitions_list, transition_enabled, progress_callback
+            )
+            
+        finally:
+            for clip in clips:
+                try:
+                    clip.close()
+                except:
+                    pass
+            # Only remove temporary resized image files (those ending with _resized.jpg)
+            for rpath in resized_paths:
+                if rpath and os.path.exists(rpath) and rpath.endswith('_resized.jpg'):
+                    try:
+                        os.remove(rpath)
+                    except:
+                        pass
+            if self.audio_clip:
+                self.audio_clip.close()
+    
+    def _generate_with_moviepy_clips(
+        self,
+        clips: List[Any],
+        durations: List[float],
+        transitions_list: List[tuple],
+        transition_enabled: bool,
+        progress_callback: Optional[Callable[[float], None]]
+    ) -> None:
+        """Generate video from pre-loaded clips using MoviePy."""
+        if not clips:
+            raise ValueError("No clips provided")
+        
+        num_clips = len(clips)
+        
+        if progress_callback:
+            progress_callback(0.4)
+        
+        if not transition_enabled or num_clips == 1:
+            final_clip = concatenate_videoclips(clips, method="compose")
+        else:
+            # Apply transitions
+            processed_clips = []
+            for i, clip in enumerate(clips):
+                if i < len(transitions_list):
+                    trans_type, trans_dur = transitions_list[i]
+                    if trans_type == "none":
+                        trans_dur = 0
+                    trans_dur = min(trans_dur, durations[i] * 0.9, durations[i + 1] * 0.9 if i + 1 < len(durations) else trans_dur)
+                    
+                    if trans_dur > 0 and trans_type != "none":
+                        clip = clip.set_duration(durations[i] - trans_dur / 2)
+                    else:
+                        clip = clip.set_duration(durations[i])
+                processed_clips.append(clip)
+            
+            final_clip = concatenate_videoclips(processed_clips, method="compose")
+        
+        if progress_callback:
+            progress_callback(0.6)
+        
+        # Add audio
+        if self.audio_clip:
+            final_clip = final_clip.set_audio(self.audio_clip.subclip(0, min(final_clip.duration, self.audio_duration)))
+        
+        if progress_callback:
+            progress_callback(0.7)
+        
+        # Write output
+        final_clip.write_videofile(
+            self.output_path,
+            fps=24,
+            codec='libx264',
+            audio_codec='aac',
+            temp_audiofile=os.path.join(self.temp_dir, 'temp-audio.m4a'),
+            remove_temp=True,
+            logger=None
+        )
+        
+        final_clip.close()
+        
+        if progress_callback:
+            progress_callback(1.0)
+    
     def generate(
         self,
         media_paths: List[str],
@@ -386,10 +602,7 @@ class VideoGenerator:
             else:
                 raise ValueError(f"Unsupported file format: {path}")
         else:
-            for path in media_paths:
-                if not self._is_image(path):
-                    raise ValueError(f"Multiple files mode only supports images: {path}")
-            self.generate_from_multiple_images(
+            self.generate_from_multiple_media(
                 media_paths,
                 progress_callback,
                 transition_enabled,

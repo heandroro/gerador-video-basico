@@ -3,6 +3,7 @@ from tkinter import ttk, filedialog, messagebox
 from typing import List, Optional, Dict, Any
 import os
 import threading
+import json
 from PIL import Image, ImageTk
 from core.transitions import TRANSITION_TYPES, TRANSITION_LABELS
 from core.ai_suggester import get_suggester, is_ai_available
@@ -49,6 +50,17 @@ class VideoGeneratorApp:
         
     def _setup_ui(self) -> None:
         """Setup the user interface."""
+        # Menu bar
+        menubar = tk.Menu(self.root)
+        self.root.config(menu=menubar)
+        
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Arquivo", menu=file_menu)
+        file_menu.add_command(label="💾 Salvar Projeto", command=self._save_project)
+        file_menu.add_command(label="📂 Abrir Projeto", command=self._load_project)
+        file_menu.add_separator()
+        file_menu.add_command(label="Sair", command=self.root.quit)
+        
         main_frame = ttk.Frame(self.root, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
         
@@ -1664,9 +1676,9 @@ class VideoGeneratorApp:
                     "Já existem arquivos selecionados. Deseja substituir por este vídeo?"
                 ):
                     self._clear_media()
-                else:
-                    return
+                # Se não substituir, simplesmente adiciona à lista existente
             
+            self._save_state()
             self.media_paths.append(path)
             self.media_listbox.insert(tk.END, os.path.basename(path))
             self._update_timeline()
@@ -1699,7 +1711,111 @@ class VideoGeneratorApp:
         self._clear_preview()
         self._update_individual_controls()
         self._update_timeline()
-        
+
+    def _save_project(self) -> None:
+        """Save current project state to a JSON file."""
+        if not self.media_paths and not self.audio_path:
+            messagebox.showwarning("Aviso", "Não há dados para salvar no projeto.")
+            return
+
+        file_path = filedialog.asksaveasfilename(
+            title="Salvar Projeto",
+            defaultextension=".vgproj",
+            filetypes=[("Projeto Gerador de Vídeo", "*.vgproj"), ("JSON", "*.json"), ("Todos os arquivos", "*.*")]
+        )
+
+        if not file_path:
+            return
+
+        project_data = {
+            "version": "1.0",
+            "media_paths": self.media_paths,
+            "audio_path": self.audio_path,
+            "output_path": self.output_path,
+            "image_durations": {str(k): v for k, v in self.image_durations.items()},
+            "individual_transitions": self.individual_transitions,
+            "transition_enabled": self.transition_enabled.get(),
+            "global_transition_type": self.global_transition_type.get(),
+            "global_transition_duration": self.global_transition_duration.get(),
+            "default_image_duration": self.default_image_duration.get(),
+            "ai_suggestions_enabled": self.ai_suggestions_enabled.get()
+        }
+
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                json.dump(project_data, f, indent=2, ensure_ascii=False)
+            messagebox.showinfo("Sucesso", f"Projeto salvo em:\n{file_path}")
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao salvar projeto:\n{str(e)}")
+
+    def _load_project(self) -> None:
+        """Load project state from a JSON file."""
+        file_path = filedialog.askopenfilename(
+            title="Abrir Projeto",
+            filetypes=[("Projeto Gerador de Vídeo", "*.vgproj"), ("JSON", "*.json"), ("Todos os arquivos", "*.*")]
+        )
+
+        if not file_path:
+            return
+
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                project_data = json.load(f)
+
+            # Validate required fields
+            if "media_paths" not in project_data:
+                raise ValueError("Arquivo de projeto inválido: media_paths não encontrado")
+
+            # Clear current state
+            self._clear_media()
+
+            # Restore media paths
+            self.media_paths = project_data.get("media_paths", [])
+            for path in self.media_paths:
+                self.media_listbox.insert(tk.END, os.path.basename(path))
+
+            # Restore durations (convert string keys back to int)
+            durations = project_data.get("image_durations", {})
+            self.image_durations = {int(k): v for k, v in durations.items()}
+
+            # Restore other settings
+            self.audio_path = project_data.get("audio_path")
+            self.output_path = project_data.get("output_path")
+            self.individual_transitions = project_data.get("individual_transitions", {})
+
+            # Restore UI variables
+            self.transition_enabled.set(project_data.get("transition_enabled", False))
+            self.global_transition_type.set(project_data.get("global_transition_type", "crossfade"))
+            self.global_transition_duration.set(project_data.get("global_transition_duration", 1.0))
+            self.default_image_duration.set(project_data.get("default_image_duration", 3.0))
+            self.ai_suggestions_enabled.set(project_data.get("ai_suggestions_enabled", False))
+
+            # Update UI labels and reload audio duration
+            if self.audio_path:
+                self.audio_label.config(text=os.path.basename(self.audio_path))
+                try:
+                    from moviepy.editor import AudioFileClip
+                    with AudioFileClip(self.audio_path) as audio:
+                        self.audio_duration = audio.duration
+                        mins = int(self.audio_duration // 60)
+                        secs = int(self.audio_duration % 60)
+                        self.timeline_audio_label.config(text=f"🎵 Áudio: {mins}:{secs:02d}")
+                        self.manual_duration_var.set(self.audio_duration)
+                except:
+                    self.audio_duration = 0
+            
+            if self.output_path:
+                self.output_label.config(text=self.output_path)
+
+            self._on_transition_toggle()
+            self._update_timeline()
+            self._update_listbox_display()
+
+            messagebox.showinfo("Sucesso", f"Projeto carregado:\n{os.path.basename(file_path)}")
+
+        except Exception as e:
+            messagebox.showerror("Erro", f"Erro ao carregar projeto:\n{str(e)}")
+
     def _move_up(self) -> None:
         """Move selected item up in the list."""
         selection = self.media_listbox.curselection()
@@ -1841,7 +1957,7 @@ class VideoGeneratorApp:
         if not self.media_paths:
             messagebox.showerror("Erro", "Selecione pelo menos uma imagem ou vídeo.")
             return False
-            
+        
         if not self.audio_path:
             messagebox.showerror("Erro", "Selecione um arquivo de áudio MP3.")
             return False
@@ -1903,7 +2019,11 @@ class VideoGeneratorApp:
             self.root.after(0, self._on_generation_complete)
             
         except Exception as e:
-            self.root.after(0, lambda: self._on_generation_error(str(e)))
+            import traceback
+            error_msg = f"{str(e)}\n\n{traceback.format_exc()}"
+            print(f"[ERRO NA GERAÇÃO] {error_msg}")
+            error_str = str(e)
+            self.root.after(0, lambda: self._on_generation_error(error_str))
             
     def _tick_timer(self) -> None:
         """Update the elapsed time label every second."""
