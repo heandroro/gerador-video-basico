@@ -39,6 +39,11 @@ class VideoGenerator:
         import tempfile
         self.temp_dir = tempfile.gettempdir()
         
+        # Force FFmpeg to output ASCII messages to avoid UTF-8 decode errors in MoviePy
+        import os as _os
+        _os.environ['LANG'] = 'C'
+        _os.environ['LC_ALL'] = 'C'
+        
     def _load_audio(self) -> None:
         """Load the audio file and get its duration."""
         self.audio_clip = AudioFileClip(self.audio_path)
@@ -190,11 +195,12 @@ class VideoGenerator:
         ])
 
         print(f"[DEBUG] FFmpeg xfade cmd: {' '.join(cmd)}")
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = subprocess.run(cmd, capture_output=True)
 
         if proc.returncode != 0:
-            print(f"[DEBUG] FFmpeg stderr:\n{proc.stderr[-2000:]}")
-            raise RuntimeError(f"FFmpeg falhou:\n{proc.stderr[-500:]}")
+            stderr = proc.stderr.decode('utf-8', errors='replace')
+            print(f"[DEBUG] FFmpeg stderr:\n{stderr[-2000:]}")
+            raise RuntimeError(f"FFmpeg falhou:\n{stderr[-500:]}")
 
         if progress_callback:
             progress_callback(1.0)
